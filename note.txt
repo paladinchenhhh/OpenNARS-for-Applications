@@ -1,0 +1,296 @@
+
+
+-------- long term design ------
+teacher rule input
+    辅助
+
+自学 有目的性的
+    nature language -> Narsese
+
+接收连接 
+ 
+ environment perception
+ goal reward
+ 
+
+数据 + 任务
+
+--------------
+-- 阅读文章 阅读理解
+#define end_read_loop unknow_factor > UNKNOW_THRESHOLD  and read_count < READ_COUNT 
+
+while end_read_loop
+    带着问题开始， 问题的产生
+    while  end_read_loop
+        阅读 转化为知识
+            即时处理
+        后处理调整
+        计算unknow_factor
+    知识输出
+    人工调整(narsese)
+
+问题的产生
+    生成知识图谱
+        时间
+        空间
+        事物相互关系
+    人工添加
+
+===============
+
+TODO list:
+1. NAL_GenerateRuleTable 使用文件流的方式输出到文件。 
+    holdon 可以暂时用两个工程的方式
+
+2. 推理全链路
+    belief_event
+    goal_event
+
+
+
+任务把师徒，师兄弟关系直接嵌入NAL中
+
+1. 嵌入到系统NAL层
+    ((((A * B) --> R) & ((A * C) --> R)) & ((B * C) -->S)) |- (((($1 * $2) --> R) & (($1 * $3) --> R)) ==> (($1 * $2) -->S))
+2. 直接在narsese层输入
+       ((((?1 * B) --> R) & ((A * C) --> R)) & ((B * C) -->S)) |- ((((E * F) --> R) & ((E * G) --> R)) & ((F * G) -->S)) 
+
+把所有NAL Rule去掉，依然可以有
+<(<(#1 * $1) --> st> &/ <(#1 * $2) --> st>) =/> <($1 * $2) --> sxd>>.
+
+<(<(#1 * $1) --> $8> &/ <(#1 * $2) --> $8>) =/> <($1 * $2) --> $9>>
+    ==> 
+<(<(#3 * $2) --> $8> &/ <(#3 * $3) --> $8>) =/> <($1 * $2) --> $9>>
+
+
+=============================== 代码流程分析
+核心数据结构：
+	#define Atom unsigned short
+    #define HASH_TYPE long
+    #define COMPOUND_TERM_SIZE_MAX 64
+    typedef struct
+    {
+        bool hashed;
+        HASH_TYPE hash;
+        Atom atoms[COMPOUND_TERM_SIZE_MAX];
+    }Term;
+
+    #define EVENT_TYPE_GOAL 1
+    #define EVENT_TYPE_BELIEF 2
+    #define EVENT_TYPE_DELETED 0
+    typedef struct {
+        Term term;
+        char type; //either JUDGMENT or GOAL
+        Truth truth;
+        Stamp stamp;
+        long occurrenceTime;
+        bool processed;
+        long creationTime;
+        bool isUserKnowledge;
+    } Event;
+
+    typedef struct {
+        long id;
+        Usage usage;
+        Term term;
+        Event belief; //the highest confident eternal belief
+        Event belief_spike;
+        Event predicted_belief;
+        Event goal_spike;
+        Table precondition_beliefs[OPERATIONS_MAX+1];
+        double priority;
+        bool hasUserKnowledge;
+        long processID; //avoids duplicate processing
+    } Concept;
+
+    typedef struct {
+        Term term;
+        Truth truth;
+        Stamp stamp;
+        //for deciding occurrence time of conclusion:
+        long occurrenceTimeOffset;
+        //for efficient spike propagation:
+        void *sourceConcept;
+        long sourceConceptId; //to check whether it's still the same
+        long creationTime;
+        bool isUserKnowledge;
+    } Implication
+
+    //A truth-expectation-ranked table for Implications, similar as pre- and post-condition table 
+    // in OpenNARS,
+    //except that this table supports revision by itself (as in NAR implications don't form concepts).
+    typedef struct {
+        Implication array[TABLE_SIZE];
+        int itemsAmount;
+    } Table
+
+    typedef struct
+    {
+        double desire;
+        bool execute;
+        int operationID;
+        Operation op;
+        Term arguments;
+        bool specialized;
+        Event *reason;
+    }Decision;
+
+    [Narsess.c] :
+    //Atomic term names:
+    char Narsese_atomNames[ATOMS_MAX][ATOMIC_TERM_LEN_MAX];
+    char Narsese_operatorNames[OPERATIONS_MAX][ATOMIC_TERM_LEN_MAX]
+    //SELF atom, avoids strcmp for checking operator format
+    Atom SELF
+
+    // Memory_ProcessNewBeliefEvent 时不存入
+    FIFO belief_events;
+	
+------------------ 主要函数调用流程
+--- 生成RuleTable
+NAL_GenerateRuleTable [NAL.c]
+    H_NAL_RULES  // 调用NAL.h 的函数 NAL1-6 的rule
+        NAL_GenerateRule 
+            NAL_GenerateConclusionTerm
+            output : NAL_DerivedEvent
+            //// R2  
+            NAL_GeneratePremisesUnifier
+
+
+
+Memory_ProcessNewBeliefEvent
+    Memory_Conceptualize 
+        //// new concept
+        //// try to add it, and if successful add to voting structure
+    if c != NULL 
+        Inference_RevisionAndChoice
+        //// create a new source_concept by 
+
+                
+
+
+----------------------  input event
+Memory_AddEvent
+    if belief
+        //// EVENT_TYPE_BELIEF FIFO_Add
+        Memory_ProcessNewBeliefEvent
+        if isImplication return
+    Memory_addCyclingEvent
+        //// insert into cycling_belief_events/cycling_goal_events
+
+
+
+
+
+NAR_AddInputNarsese 		//NAR.c
+	Narsese_Sentence		// Narsese.c  解析出term tv
+		Narsese_Term
+			Narsese_Expand
+			Narsese_PrefixTransform
+			buildBinaryTree
+                // atomic name --> index， 已有的从HashTable中获取，
+                // 否则自增一个并注册进入Narsese_atomNames
+                Narsese_AtomicTermIndex 
+                    HashTable_Get or insert to Narsese_atomNames 
+			Variable_Normalize
+			Term_Hash
+	RuleTable_Reduce        // 减少重复的
+    if query
+        for concepts.itemsAmount
+            //// 变量替换查找， 使用最大Truth_Expectation
+    else belief or goal
+	    NAR_AddInput
+		    Event_InputEvent
+		    Memory_AddInputEvent
+		    NAR_Cycles(1)
+
+------ process event
+Cycle_Perform
+    Cycle_PopEvents // pop belief/goal from cycling_belief_events/cycling_goal_events
+    
+    // Process incoming belief events from FIFO, building implications utilizing input sequences
+    Cycle_ProcessInputBeliefEvents 
+    
+    //3. Process incoming goal events, propagating subgoals according to implications, 
+    //    triggering decisions when above decision threshold
+    Cycle_ProcessInputGoalEvents(currentTime);
+    
+    //4. Perform inference between in 1. retrieved events and semantically/temporally related, high-priority concepts to derive and process new events
+    Cycle_Inference(currentTime);
+    Cycle_Prediction(currentTime);
+    
+    //5. Apply relative forgetting for concepts according to CONCEPT_DURABILITY and events according to BELIEF_EVENT_DURABILITY
+    Cycle_RelativeForgetting(currentTime);
+    
+    //6. Push in 1. selected events back to the queue as well, applying relative forgetting based on BELIEF_EVENT_DURABILITY_ON_USAGE
+    Cycle_PushEvents(currentTime);
+
+Cycle_ProcessInputBeliefEvents
+    /*
+    for belief_events
+        for MAX_SEQUENCE_LEN
+            Event *toProcess = FIFO_GetNewestSequence(&belief_events, len);
+            //Process an event, by creating a concept, or activating an existing
+            Cycle_ProcessSensorimotorEvent
+                //add a new concept for e if not yet existing
+                Memory_Conceptualize(&e->term, currentTime);
+                Memory_FindConceptByTerm
+                InvertedAtomIndex_GetConceptChain
+                //// Variable_ApplySubstitute if have variable
+                if substituions.succesful
+                    // doing inference within the matched concept, returning whether decisionMaking should continue 
+                    Cycle_ActivateSensorimotorConcept
+                        if EVENT_TYPE_BELIEF 
+                            c->belief_spike = e
+                        else goal
+                            Decision_Suggest
+            ////Mine for <(&/,precondition,operation) =/> postcondition> patterns in the FIFO:
+            Decision_Anticipate(op_id, currentTime); //collection of negative evidence, new way
+            Cycle_ReinforceLink(precondition, &postcondition);
+
+Cycle_Inference
+    RuleTable_Apply
+        //// 1. 自己的term
+        // term下的atoms
+        ConceptChainElement* chain = InvertedAtomIndex_GetConceptChain(e->term.atoms[k]
+            // 遍历chan 上所有相关节点
+
+    ConceptChainElement* chain = InvertedAtomIndex_GetConceptChain(e->term.atoms[k]);    
+
+Cycle_Prediction
+    /* 
+    for concepts.itemsAmount
+        c->precondition_beliefs[0].itemsAmount
+
+    Inference_BeliefDeduction
+
+//// 依次查找每条rule，如果对应上就调用NAL_DerivedEvent 生成新的规则
+//// 查找方法， 依次匹配每个term的atomic_term 和  copula
+//// 每次atomic_term被找到就替换成subtitle
+RuleTable_Apply [RuleTable.c]
+    //PremisesUnifier
+    Term_ExtractSubterm(term1) // 取出每个premise下的子term
+
+    // 如果31 term替换了，且不等于新的atomic_term, 则说明不匹配跳入下一条规则
+    if ((substitutions[31].atoms[0] != 0 && !Term_Equal(&substitutions[31], &subtree)) 
+            || Narsese_copulaEquals(subtree.atoms[0], '@')) {
+			goto RULE_1;
+	}
+
+    NAL_DerivedEvent
+        // conclusionTerm 创建一个event, EVENT_TYPE_BELIEF input=false derived=true
+        // readded revised predicted = false
+        Memory_AddEvent
+            Memory_ProcessNewBeliefEvent
+
+Memory_Conceptualize // term to create concept
+    PriorityQueue_Push(&concepts, 1)
+    InvertedAtomIndex_AddConcept
+    HashTable_Set(&HTconcepts ) //also add added concept to HashMap:
+
+===================
+问题
+1. narsess语句解析出数据的怎么存放
+    例子：({孙悟空} * {唐僧}) --> 师徒>. :|:
+    Narsese_atomNames 存放atom对应的名字
+    term 
+    corpus
