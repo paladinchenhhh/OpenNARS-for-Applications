@@ -1,0 +1,154 @@
+<apple --> fruit>.
+<fruit --> food>.
+
+
+<苹果 --> 水果>.
+<水果 --> 食物>.
+
+1. 中文问题
+怀疑 , Narsese_IsNonCopulaAtom 添加支持即可
+
+
+
+
+
+
+2021-01-23 todo list 
+1. 疑问句怎么写
+	<apple --> ?1>?
+	错误： <apple --> ?1>. :|:
+
+2. relation怎么建立
+	徒师 -- 师兄弟关系建立
+	怎么推理出来的
+
+
+3. image怎么使用
+(water * salt) --> dissolve
+water --> (/ dissolve @ salt)
+salt --> (/ dissolve water @)
+water --> (dissolve /1 salt)
+salt --> (dissolve /2 water)
+
+4. 设置要解决的问题
+	短期， 中期， 长期
+	任务：清晰的可衡量标注
+	问题： 接近问题本质
+	
+	nars 擅长归类， 
+
+5. Narsese 语言的含义， 对应的ona记号
+	https://github.com/opennars/opennars/wiki/Narsese-Grammar-(Input-Output-Format)
+	&/ 
+
+=============================== 代码流程分析
+核心数据结构：
+	#define Atom unsigned short
+	
+
+
+NAR_AddInputNarsese 		//NAR.c
+	Narsese_Sentence		// NAR.c
+		Narsese_Term
+			Narsese_Expand
+			Narsese_PrefixTransform
+			buildBinaryTree
+			Variable_Normalize
+			Term_Hash
+	RuleTable_Reduce
+	NAR_AddInput
+		Event_InputEvent
+		Memory_AddInputEvent
+		NAR_Cycles(1)
+
+问题
+
+=============
+关系推理： 徒师
+
+//--- 验证OK
+<({孙悟空} * {唐僧}) --> 徒师>. :|:
+<({猪八戒} * {唐僧}) --> 徒师>. :|:
+<({猪八戒} * {孙悟空}) --> 师兄弟>. :|:
+<({张翠山} * {张三丰}) --> 徒师>. :|:
+<({宋远桥} * {张三丰}) --> 徒师>. :|:
+
+// 推理过程 ： 
+<({宋远桥} * {张翠山}) --> ?1>?
+
+# 为什么一定要event event和statument关系
+<({孙悟空} * {唐僧}) --> 徒师>.
+<({猪八戒} * {唐僧}) --> 徒师>.
+<({猪八戒} * {孙悟空}) --> 师兄弟>.
+<({张翠山} * {张三丰}) --> 徒师>.
+<({宋远桥} * {张三丰}) --> 徒师>.
+
+//OK徒师
+<({张翠山} * ?1) --> 徒师>?
+<({张翠山} * {张三丰}) --> 徒师>?
+<({宋远桥} * {张翠山}) --> ?1>?
+
+<({郝大通} * {丘处机}) --> 师兄弟>. :|:
+<({丘处机} * {王重阳}) --> 徒师>. :|:
+<({郝大通} * {王重阳}) --> ?1>?
+
+//返回None
+<({张翠山} * {张三丰}) --> 师兄弟>?
+<({张翠山} * {宋远桥}) --> 师兄弟>?
+<({张翠山} * {宋远桥}) --> 徒师>?
+<({张翠山} * {宋远桥}) --> ?1>?
+
+<(孙悟空 * 唐僧) --> 徒师>. :|:
+<(猪八戒 * 唐僧) --> 徒师>. :|:
+<(猪八戒 * 孙悟空) --> 师兄弟>. :|:
+<(张翠山 * 张三丰) --> 徒师>. :|:
+<(宋远桥 * 张三丰) --> 徒师>. :|:
+<(宋远桥 * 张翠山) --> ?1>?
+# 反过来不行
+<(张翠山 * 宋远桥) --> ?1>?
+
+<(a1 * b) --> r>.
+<(a2 * b) --> r>.
+<(a1 * a2) --> r2>.
+<(c1 * d) --> r>.
+<(c2 * d) --> r>.
+
+<(c1 * d) --> ?1>?
+<(c1 * d) --> r>?
+100
+<(c1 * c2)--> ?1>?
+
+// 必须以事件形式输入
+<(a1 * b) --> r>. :|:
+<(a2 * b) --> r>. :|:
+<(a1 * a2) --> r2>. :|:
+<(c1 * d) --> r>. :|:
+<(c2 * d) --> r>. :|:
+<(c1 * c2)--> ?1>?
+
+<({a1} * {b}) --> r>. :|:
+<({a2} * {b}) --> r>. :|:
+<({a1} * {a2}) --> r2>. :|:
+<({c1} * {d}) --> r>. :|:
+<({c2} * {d}) --> r>. :|:
+<({c1} * {c2})--> ?1>?
+
+---  验证ok
+<(a * b) --> r>.
+<c --> a>.
+3
+<(c * b) --> ?1>?
+
+-- OK
+<(a1 * a2) --> r>. :|:
+<(b1 * b2) --> r>. :|:
+<(a1 * a2) --> r2>. :|:
+<(b1 * b2) --> r2>?
+
+====== 工程todo
+1. 序列存储
+	https://github.com/opennars/OpenNARS-for-Applications/wiki/Persistent-Memory
+2. 多线程性能优化
+	https://github.com/opennars/OpenNARS-for-Applications/wiki/Efficiency-Considerations
+
+
